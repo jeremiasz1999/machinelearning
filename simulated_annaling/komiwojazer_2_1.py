@@ -80,6 +80,14 @@ def compute_initial_temperature(transitions, chi_0=0.8, p=1, epsilon=1e-3, T1=No
 
     return Tn
 
+def compute_temperature_with_increasing_samples(cities, num_samples_list=[20, 100, 500], chi_0=0.8):
+    T0 = 0
+    for num_samples in num_samples_list:
+        transitions = generate_positive_transitions(cities, num_samples)
+        T0 = compute_initial_temperature(transitions, chi_0=chi_0)
+        print(f"Temperatura dla {num_samples} próbek: {T0}")
+    return T0
+
 # --- Simulated Annealing --- #
 def simulated_annealing_tsp(cities, T0, alpha=0.995, iterations=10000):
     current = list(range(len(cities)))
@@ -94,7 +102,7 @@ def simulated_annealing_tsp(cities, T0, alpha=0.995, iterations=10000):
         candidate_cost = total_distance(candidate, cities)
         delta = candidate_cost - current_cost
 
-        if delta < 0 or random.random() < math.exp(-delta / T):
+        if delta < 0 or random.uniform(0, 1) < math.exp(-delta / T):
             current = candidate
             current_cost = candidate_cost
             if current_cost < best_cost:
@@ -114,16 +122,17 @@ if __name__ == "__main__":
     if cities is None:
         print(" Nie udało się wczytać miast. Sprawdź plik 'generated_cities.csv'.")
         exit()
-    transitions = generate_positive_transitions(cities, num_transitions=100)
+
+    # Obliczanie temperatury początkowej z rosnącą liczbą próbek
+    num_samples_list = [20, 100, 500, 2500]  # Lista liczb próbek
+    T0 = compute_temperature_with_increasing_samples(cities, num_samples_list=num_samples_list, chi_0=0.8)
+
+    # Wyświetlenie wyniku
+    print(f"\nOstateczna temperatura początkowa: {T0:.4f}")
+
+    # Uruchomienie symulowanego wyżarzania z obliczoną temperaturą początkową
+    best_tour, best_cost = simulated_annealing_tsp(cities, T0)
+    print(f"\n✅ Ostateczny wynik: Najlepszy dystans = {best_cost:.2f}")
+    print("🧭 Kolejność odwiedzania miast:", best_tour)
 
 
-    if not transitions:
-        print("⚠️ Nie udało się wygenerować przejść pogarszających.")
-    else:
-        chi_0 = 0.8
-        T0 = compute_initial_temperature(transitions, chi_0=chi_0)
-        print(f"\n🎯 Obliczona temperatura początkowa T₀ = {T0:.4f} dla χ₀ = {chi_0}\n")
-
-        best_tour, best_cost = simulated_annealing_tsp(cities, T0)
-        print(f"\n✅ Ostateczny wynik: Najlepszy dystans = {best_cost:.2f}")
-        print("🧭 Kolejność odwiedzania miast:", best_tour)

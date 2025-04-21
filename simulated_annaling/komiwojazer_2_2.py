@@ -39,8 +39,11 @@ def two_opt_swap(tour):
     a, b = sorted(random.sample(range(len(tour)), 2))
     return tour[:a] + tour[a:b+1][::-1] + tour[b+1:]
 
-# --- Initial Temperature Estimation --- #
+# --- Initial Transition Sampling --- #
 def generate_positive_transitions(cities, num_transitions=100):
+    """
+    Generuje losowe trasy i wybiera tylko te przejścia, które pogarszają koszt.
+    """
     transitions = []
     for _ in range(num_transitions * 2):
         tour = list(range(len(cities)))
@@ -54,6 +57,28 @@ def generate_positive_transitions(cities, num_transitions=100):
             break
     return transitions
 
+# --- Transition Sampling from Plateau --- #
+def collect_transitions_at_T1(cities, T1, plateau_iters=500):
+    """
+    Zbiera przejścia pogarszające podczas plateau na temperaturze T1.
+    """
+    current = list(range(len(cities)))
+    random.shuffle(current)
+    current_cost = total_distance(current, cities)
+    transitions = []
+
+    for _ in range(plateau_iters):
+        candidate = two_opt_swap(current)
+        candidate_cost = total_distance(candidate, cities)
+        delta = candidate_cost - current_cost
+        if delta > 0:
+            transitions.append((current_cost, candidate_cost))
+        if delta < 0 or random.random() < math.exp(-delta / T1):
+            current = candidate
+            current_cost = candidate_cost
+    return transitions
+
+# --- Initial Temperature Estimation --- #
 def estimate_acceptance(transitions, T):
     numerator = sum(math.exp(-Emax / T) for (_, Emax) in transitions)
     denominator = sum(math.exp(-Emin / T) for (Emin, _) in transitions)
@@ -114,16 +139,23 @@ if __name__ == "__main__":
     if cities is None:
         print(" Nie udało się wczytać miast. Sprawdź plik 'generated_cities.csv'.")
         exit()
-    transitions = generate_positive_transitions(cities, num_transitions=100)
 
+    chi_0 = 0.8
 
-    if not transitions:
-        print("⚠️ Nie udało się wygenerować przejść pogarszających.")
-    else:
-        chi_0 = 0.8
-        T0 = compute_initial_temperature(transitions, chi_0=chi_0)
-        print(f"\n🎯 Obliczona temperatura początkowa T₀ = {T0:.4f} dla χ₀ = {chi_0}\n")
+    # Krok 1: oszacuj T1 z podstawowej próbki
+    base_transitions = generate_positive_transitions(cities, num_transitions=100)
+    T1 = compute_initial_temperature(base_transitions, chi_0=chi_0)
 
-        best_tour, best_cost = simulated_annealing_tsp(cities, T0)
-        print(f"\n✅ Ostateczny wynik: Najlepszy dystans = {best_cost:.2f}")
-        print("🧭 Kolejność odwiedzania miast:", best_tour)
+    # Krok 2: zbierz lepsze przejścia podczas plateau w T1
+    plateau_transitions = collect_transitions_at_T1(cities, T1)
+    if not plateau_transitions:
+        print("⚠️ Nie udało się wygenerować przejść pogarszających na plateau.")
+        exit()
+
+    # Krok 3: oblicz dokładniejsze T0 z użyciem zebranych przejść
+    T0 = compute_initial_temperature(plateau_transitions, chi_0=chi_0)
+    print(f"\n🎯 Obliczona temperatura początkowa T₀ = {T0:.4f} dla χ₀ = {chi_0}\n")
+
+    best_tour, best_cost = simulated_annealing_tsp(cities, T0)
+    print(f"\n✅ Ostateczny wynik: Najlepszy dystans = {best_cost:.2f}")
+    print("🧭 Kolejność odwiedzania miast:", best_tour)
