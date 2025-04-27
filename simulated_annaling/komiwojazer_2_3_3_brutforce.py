@@ -1,6 +1,7 @@
 import random
 import math
 import csv
+from itertools import permutations
 
 # --- TSP Helpers --- #
 def load_cities_from_csv(filename="generated_cities.csv"):
@@ -26,6 +27,20 @@ def load_cities_from_csv(filename="generated_cities.csv"):
         print(f" Wystąpił błąd podczas wczytywania pliku: {e}")
         return None
     return cities
+
+def brute_force_tsp(cities):
+    """
+    Dokładne rozwiązanie TSP metodą pełnego przeglądu permutacji.
+    """
+    n = len(cities)
+    best_tour = None
+    best_cost = float("inf")
+    for perm in permutations(range(n)):
+        cost = total_distance(perm, cities)
+        if cost < best_cost:
+            best_cost = cost
+            best_tour = perm
+    return list(best_tour), best_cost
 
 def total_distance(tour, cities):
     dist = 0
@@ -119,7 +134,7 @@ def compute_initial_temperature(transitions, chi_0=0.8, p=1, epsilon=1e-3, T1=No
     return Tn
 
 # --- Adaptive Sampling --- #
-def adaptive_temperature_estimation(cities, chi_0=0.8, epsilon_T=1e-2, max_steps=8):
+def adaptive_temperature_estimation(cities, chi_0=0.8, epsilon_T=1e-2, max_steps=5):
     previous_T = None
     transitions_count = 500
 
@@ -203,3 +218,16 @@ if __name__ == "__main__":
     best_tour, best_cost = simulated_annealing_tsp(cities, T0)
     print(f"\nOstateczny wynik: Najlepszy dystans = {best_cost:.2f}")
     print("Kolejność odwiedzania miast:", best_tour)
+
+# --- Porównanie z bruteforce --- #
+if len(cities) <= 10:
+    print("\n Uruchamiam dokładne bruteforce TSP...")
+    bf_tour, bf_cost = brute_force_tsp(cities)
+    print(f" Bruteforce: Najlepszy możliwy dystans = {bf_cost:.2f}")
+    print(f" Kolejność miast (bruteforce): {bf_tour}")
+    if abs(bf_cost - best_cost) < 1e-6:
+        print(" Algorytm SA ZNALAZŁ globalne minimum!")
+    else:
+        print(" SA NIE znalazł najlepszego możliwego rozwiązania.")
+else:
+    print("\n Bruteforce niedostępne – za dużo miast (>{10})")

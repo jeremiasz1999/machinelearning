@@ -1,6 +1,7 @@
 import random
 import math
 import csv
+import numpy as np
 
 # --- TSP Helpers --- #
 def load_cities_from_csv(filename="generated_cities.csv"):
@@ -92,10 +93,20 @@ def collect_transitions_at_T1(cities, T1, plateau_iters=500):
     return transitions
 
 # --- Initial Temperature Estimation --- #
+#def estimate_acceptance(transitions, T):
+#    numerator = sum(math.exp(-Emax / T) for (_, Emax) in transitions)
+#    denominator = sum(math.exp(-Emin / T) for (Emin, _) in transitions)
+#    return numerator / denominator
+
 def estimate_acceptance(transitions, T):
-    numerator = sum(math.exp(-Emax / T) for (_, Emax) in transitions)
-    denominator = sum(math.exp(-Emin / T) for (Emin, _) in transitions)
+    """
+    Oblicza współczynnik akceptacji przejść pogarszających przy temperaturze T,
+    uwzględniając rozkład Boltzmanna.
+    """
+    numerator = sum(math.exp(-Emin / T) * math.exp(-(Emax - Emin) / T) for Emin, Emax in transitions)
+    denominator = sum(math.exp(-Emin / T) for Emin, _ in transitions)
     return numerator / denominator
+
 
 def compute_initial_temperature(transitions, chi_0=0.8, p=1, epsilon=1e-3, T1=None):
     if T1 is None:
@@ -119,7 +130,7 @@ def compute_initial_temperature(transitions, chi_0=0.8, p=1, epsilon=1e-3, T1=No
     return Tn
 
 # --- Adaptive Sampling --- #
-def adaptive_temperature_estimation(cities, chi_0=0.8, epsilon_T=1e-2, max_steps=8):
+def adaptive_temperature_estimation(cities, chi_0=0.8, epsilon_T=1e-2, max_steps=7):
     previous_T = None
     transitions_count = 500
 
@@ -178,7 +189,6 @@ if __name__ == "__main__":
 
     chi_0 = 0.8
 
-
     # Krok 1: Szybka estymacja T₁ z próbki 100 przejść
     T1_transitions = generate_positive_transitions(cities, num_transitions=100)
     T1 = adaptive_temperature_estimation(T1_transitions, chi_0=chi_0)
@@ -196,6 +206,14 @@ if __name__ == "__main__":
     T0 = compute_initial_temperature(plateau_transitions, chi_0=chi_0)
     print(f"\nObliczona temperatura początkowa T₀ = {T0:.4f} dla χ₀ = {chi_0}\n")
 
+    for num_samples in [100, 500, 1000, 2000]:
+        transitions = generate_positive_transitions(cities, num_transitions=num_samples)
+        print(
+            f"Próby ({num_samples}): Średnia δ = {sum(after - before for (before, after) in transitions) / len(transitions):.4f}")
+
+    deltas = [after - before for (before, after) in transitions]
+    correlation = np.corrcoef(deltas[:-1], deltas[1:])[0, 1]
+    print(f"Korelacja między kolejnymi próbkami: {correlation:.4f}")
 
     print(f"\nOstateczna adaptacyjna temperatura początkowa T₀ = {T0:.4f}\n")
 
@@ -203,3 +221,4 @@ if __name__ == "__main__":
     best_tour, best_cost = simulated_annealing_tsp(cities, T0)
     print(f"\nOstateczny wynik: Najlepszy dystans = {best_cost:.2f}")
     print("Kolejność odwiedzania miast:", best_tour)
+

@@ -36,8 +36,22 @@ def total_distance(tour, cities):
     return dist
 
 def two_opt_swap(tour):
-    a, b = sorted(random.sample(range(len(tour)), 2))
-    return tour[:a] + tour[a:b+1][::-1] + tour[b+1:]
+    """
+    Klasyczny operator 2-OPT: wybiera dwa punkty i odwraca segment między nimi.
+    """
+    n = len(tour)
+    if n < 4:
+        return tour[:]  # zbyt krótka trasa, brak sensownych przejść
+
+    # losujemy dwie różne pozycje tak, aby a < b - 1 (czyli co najmniej 2-elementowy segment)
+    while True:
+        a, b = sorted(random.sample(range(n), 2))
+        if b - a > 1:
+            break
+
+    # odwracamy segment między a i b (inclusive)
+    new_tour = tour[:a] + tour[a:b+1][::-1] + tour[b+1:]
+    return new_tour
 
 # --- Initial Temperature Estimation --- #
 def generate_positive_transitions(cities, num_transitions=100):
@@ -112,7 +126,7 @@ def simulated_annealing_tsp(cities, T0, alpha=0.995, iterations=10000):
         T *= alpha
 
         if i % 1000 == 0:
-            print(f"Iteracja {i}: Najlepszy dystans = {best_cost:.2f}")
+            print(f"Iteracja {i}: Najlepszy dystans = {best_cost:.2f+}")
 
     return best, best_cost
 

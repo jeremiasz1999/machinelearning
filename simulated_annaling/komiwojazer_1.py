@@ -1,6 +1,7 @@
 import csv
 import math
 import random
+import matplotlib.pyplot as plt
 
 
 def load_cities_from_csv(filename="generated_cities.csv"):
@@ -98,3 +99,26 @@ if __name__ == '__main__':
     print("\nOstateczny wynik:")
     print("Najlepsza trasa:", best_route)
     print("Długość trasy:", round(cost, 2))
+
+    results = []
+    for i in range(200):
+        _, cost = simulated_annealing(cities)
+        results.append(cost)
+
+    best_found = min(results)
+    count_best = results.count(best_found)
+
+    print(f"\n🏁 Najlepszy znaleziony koszt: {best_found:.2f}")
+    print(f"🔁 Liczba wystąpień tego kosztu w 300 powtórzeniach: {count_best} ({count_best / 300:.2%})")
+
+    # Histogram wyników
+    plt.figure(figsize=(10, 6))
+    plt.hist(results, bins=20, color='skyblue', edgecolor='black')
+    plt.title("Rozkład końcowych kosztów po 300 uruchomieniach SA")
+    plt.xlabel("Całkowity dystans")
+    plt.ylabel("Liczba wystąpień")
+    plt.grid(True)
+    plt.axvline(best_found, color='red', linestyle='dashed', linewidth=1.5, label=f"Minimum: {best_found:.2f}")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
