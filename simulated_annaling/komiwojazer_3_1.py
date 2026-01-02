@@ -3,7 +3,7 @@ import math
 import csv
 import matplotlib.pyplot as plt
 
-chi_0 = 0.85
+chi_0 = 0.91
 
 # --- TSP Helpers --- #
 def load_cities_from_csv(filename="generated_cities.csv"):
@@ -122,14 +122,14 @@ def compute_initial_temperature(transitions, chi_0 = chi_0, p=1, epsilon=1e-2, T
     return Tn
 
 # --- Adaptive Sampling --- #
-def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T=1e-2, max_steps=5):
+def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T= 2, max_steps=9):
     previous_T = None
     transitions_count = 500
 
     for step in range(max_steps):
         transitions = generate_positive_transitions(cities, num_transitions=transitions_count)
         if not transitions:
-            print("Brak pogarszających przejść.")
+            print(" Brak pogarszających przejść.")
             return None
 
         T = compute_initial_temperature(transitions, chi_0=chi_0)
@@ -139,38 +139,49 @@ def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T=1e-2, max_s
             return T
 
         previous_T = T
-        transitions_count *=2  # zwiększ próbkę
+        transitions_count *= 2
 
     print("Temperatura się nie ustabilizowała.")
     return previous_T
 
 # --- Simulated Annealing --- #
-def simulated_annealing_tsp(cities, T0, alpha=0.9993, iterations=10000):
+def simulated_annealing_tsp(cities, T0, iterations=10000, plateau=500, Tmin = 1e-2 ):
     current = list(range(len(cities)))
     random.shuffle(current)
     current_cost = total_distance(current, cities)
-    best = current[:]
-    best_cost = current_cost
+    best, best_cost = current[:], current_cost
     T = T0
 
     for i in range(iterations):
-        candidate = two_opt_swap(current)
-        candidate_cost = total_distance(candidate, cities)
-        delta = candidate_cost - current_cost
+        accepted = 0
 
-        if delta < 0 or random.random() < math.exp(-delta / T):
-            current = candidate
-            current_cost = candidate_cost
-            if current_cost < best_cost:
-                best = current[:]
-                best_cost = current_cost
+        for _ in range(plateau):  # plateau = liczba prób na poziom T
+            candidate = two_opt_swap(current)
+            candidate_cost = total_distance(candidate, cities)
+            delta = candidate_cost - current_cost
 
-        T *= alpha
+            if delta < 0 or random.random() < math.exp(-delta / T):
+                current, current_cost = candidate, candidate_cost
+                accepted += 1
+                if current_cost < best_cost:
+                    best, best_cost = current[:], current_cost
 
-        if i % 1000 == 0:
-            print(f"Iteracja {i}: Najlepszy dystans = {best_cost:.2f}")
+        # adaptacyjne chłodzenie
+        acceptance_ratio = accepted / plateau
+        if acceptance_ratio < 0.2:
+            T *= 0.97
+        elif acceptance_ratio > 0.8:
+            T *= 0.98
+        else:
+            T *= 0.95
+
+        T = max(T * 0,99, Tmin)
+
+        if i % 100 == 0:
+            print(f"Iteracja {i}: Najlepszy dystans = {best_cost:.2f}, T = {T:.2f}, r = {acceptance_ratio:.2f}")
 
     return best, best_cost
+
 
 # --- RUN --- #
 if __name__ == "__main__":
@@ -179,15 +190,9 @@ if __name__ == "__main__":
         print("Nie udało się wczytać miast. Sprawdź plik 'generated_cities.csv'.")
         exit()
 
+    T1 = adaptive_temperature_estimation(cities, chi_0=chi_0)
 
-
-
-    # Krok 1: Szybka estymacja T₁ z próbki 500 przejść
-    T1_transitions = generate_positive_transitions(cities, num_transitions=500)
-    T1 = adaptive_temperature_estimation(T1_transitions, chi_0=chi_0)
-    if T1 is None:
-        exit()
-    print(f" Wstępna temperatura T₁ = {T1:.4f}")
+    print(f"\nObliczona temperatura początkowa T1 = {T1:.4f} dla χ₀ = {chi_0}\n")
 
     # Krok 2: zbierz lepsze przejścia podczas plateau w T1
     plateau_transitions = collect_transitions_at_T1(cities, T1, plateau_iters=500)

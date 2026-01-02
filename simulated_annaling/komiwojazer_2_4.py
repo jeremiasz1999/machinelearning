@@ -1,16 +1,13 @@
 import random
 import math
 import csv
-import matplotlib.pyplot as plt
 
-chi_0 = 0.85
 
-# --- TSP Helpers --- #
 def load_cities_from_csv(filename="generated_cities.csv"):
     """
     Wczytuje współrzędne miast z pliku CSV.
 
-    :param filename: Nazwa pliku CSV.
+    :filename: Nazwa pliku CSV.
     :return: Lista miast (każde miasto to krotka (x, y)).
     """
     cities = []
@@ -52,17 +49,17 @@ def two_opt_swap(tour):
         if b - a > 1:
             break
 
-    # odwracamy segment między a i b (inclusive)
+    # odwracamy segment między a i b
     new_tour = tour[:a] + tour[a:b+1][::-1] + tour[b+1:]
     return new_tour
 
 # --- Transition Sampling --- #
-def generate_positive_transitions(cities, num_transitions=500):
+def generate_positive_transitions(cities, num_transitions=100):
     """
-    Generuje losowe trasy i wybiera tylko te przejścia, które pogarszają koszt.
+    Generuje losowe trasy i wybieramy tylko te przejścia, które pogarszają koszt.
     """
     transitions = []
-    for _ in range(num_transitions):
+    for _ in range(num_transitions * 2):
         tour = list(range(len(cities)))
         random.shuffle(tour)
         before = total_distance(tour, cities)
@@ -100,7 +97,7 @@ def estimate_acceptance(transitions, T):
     denominator = sum(math.exp(-Emin / T) for (Emin, _) in transitions)
     return numerator / denominator
 
-def compute_initial_temperature(transitions, chi_0 = chi_0, p=1, epsilon=1e-2, T1=None):
+def compute_initial_temperature(transitions, chi_0=0.8, p=2, epsilon=1e-3, T1=None):
     if T1 is None:
         avg_delta = sum(Emax - Emin for (Emin, Emax) in transitions) / len(transitions)
         T1 = -avg_delta / math.log(chi_0)
@@ -122,14 +119,14 @@ def compute_initial_temperature(transitions, chi_0 = chi_0, p=1, epsilon=1e-2, T
     return Tn
 
 # --- Adaptive Sampling --- #
-def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T=1e-2, max_steps=5):
+def adaptive_temperature_estimation(cities, chi_0=0.8, epsilon_T=1e-2, max_steps=8):
     previous_T = None
     transitions_count = 500
 
     for step in range(max_steps):
         transitions = generate_positive_transitions(cities, num_transitions=transitions_count)
         if not transitions:
-            print("Brak pogarszających przejść.")
+            print(" Brak pogarszających przejść.")
             return None
 
         T = compute_initial_temperature(transitions, chi_0=chi_0)
@@ -139,13 +136,13 @@ def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T=1e-2, max_s
             return T
 
         previous_T = T
-        transitions_count *=2  # zwiększ próbkę
+        transitions_count *= 2  # zwiększ próbkę
 
     print("Temperatura się nie ustabilizowała.")
     return previous_T
 
 # --- Simulated Annealing --- #
-def simulated_annealing_tsp(cities, T0, alpha=0.9993, iterations=10000):
+def simulated_annealing_tsp(cities, T0, alpha=0.995, iterations=10000):
     current = list(range(len(cities)))
     random.shuffle(current)
     current_cost = total_distance(current, cities)
@@ -176,15 +173,14 @@ def simulated_annealing_tsp(cities, T0, alpha=0.9993, iterations=10000):
 if __name__ == "__main__":
     cities = load_cities_from_csv("../generated_cities.csv")
     if cities is None:
-        print("Nie udało się wczytać miast. Sprawdź plik 'generated_cities.csv'.")
+        print(" Nie udało się wczytać miast. Sprawdź plik 'generated_cities.csv'.")
         exit()
 
+    chi_0 = 0.8
 
 
-
-    # Krok 1: Szybka estymacja T₁ z próbki 500 przejść
-    T1_transitions = generate_positive_transitions(cities, num_transitions=500)
-    T1 = adaptive_temperature_estimation(T1_transitions, chi_0=chi_0)
+    # Krok 1: Szybka estymacja T₁ z próbki 100 przejść
+    T1 = adaptive_temperature_estimation(cities, chi_0=chi_0)
     if T1 is None:
         exit()
     print(f" Wstępna temperatura T₁ = {T1:.4f}")
@@ -200,36 +196,9 @@ if __name__ == "__main__":
     print(f"\nObliczona temperatura początkowa T₀ = {T0:.4f} dla χ₀ = {chi_0}\n")
 
 
+    print(f"\nOstateczna adaptacyjna temperatura początkowa T₀ = {T0:.4f}\n")
 
     # 4. Główna faza wyżarzania
     best_tour, best_cost = simulated_annealing_tsp(cities, T0)
     print(f"\nOstateczny wynik: Najlepszy dystans = {best_cost:.2f}")
     print("Kolejność odwiedzania miast:", best_tour)
-
-
-
-    # --- Wielokrotne uruchomienie SA w celu analizy statystycznej --- #
-    print("\nUruchamiam 200 powtórzeń algorytmu...")
-
-    results = []
-    for i in range(200):
-        _, cost = simulated_annealing_tsp(cities, T0)
-        results.append(cost)
-
-    best_found = min(results)
-    count_best = results.count(best_found)
-
-    print(f"\nNajlepszy znaleziony koszt: {best_found:.2f}")
-    print(f" Liczba wystąpień tego kosztu w 200 powtórzeniach: {count_best} ({count_best / 200:.2%})")
-
-    # Histogram wyników
-    plt.figure(figsize=(10, 6))
-    plt.hist(results, bins=20, color='skyblue', edgecolor='black')
-    plt.title("Rozkład końcowych kosztów po 200 uruchomieniach SA")
-    plt.xlabel("Całkowity dystans")
-    plt.ylabel("Liczba wystąpień")
-    plt.grid(True)
-    plt.axvline(best_found, color='red', linestyle='dashed', linewidth=1.5, label=f"Minimum: {best_found:.2f}")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()

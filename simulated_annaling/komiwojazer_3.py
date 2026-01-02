@@ -3,7 +3,7 @@ import math
 import csv
 import matplotlib.pyplot as plt
 
-chi_0 = 0.85
+chi_0 = 0.91
 
 # --- TSP Helpers --- #
 def load_cities_from_csv(filename="generated_cities.csv"):
@@ -122,14 +122,14 @@ def compute_initial_temperature(transitions, chi_0 = chi_0, p=1, epsilon=1e-2, T
     return Tn
 
 # --- Adaptive Sampling --- #
-def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T=1e-2, max_steps=5):
+def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T= 2, max_steps=9):
     previous_T = None
     transitions_count = 500
 
     for step in range(max_steps):
         transitions = generate_positive_transitions(cities, num_transitions=transitions_count)
         if not transitions:
-            print("Brak pogarszających przejść.")
+            print(" Brak pogarszających przejść.")
             return None
 
         T = compute_initial_temperature(transitions, chi_0=chi_0)
@@ -139,13 +139,13 @@ def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T=1e-2, max_s
             return T
 
         previous_T = T
-        transitions_count *=2  # zwiększ próbkę
+        transitions_count *= 2
 
     print("Temperatura się nie ustabilizowała.")
     return previous_T
 
 # --- Simulated Annealing --- #
-def simulated_annealing_tsp(cities, T0, alpha=0.9993, iterations=10000):
+def simulated_annealing_tsp(cities, T0, alpha= 0.999, iterations=10000):
     current = list(range(len(cities)))
     random.shuffle(current)
     current_cost = total_distance(current, cities)
@@ -179,15 +179,9 @@ if __name__ == "__main__":
         print("Nie udało się wczytać miast. Sprawdź plik 'generated_cities.csv'.")
         exit()
 
+    T1 = adaptive_temperature_estimation(cities, chi_0=chi_0)
 
-
-
-    # Krok 1: Szybka estymacja T₁ z próbki 500 przejść
-    T1_transitions = generate_positive_transitions(cities, num_transitions=500)
-    T1 = adaptive_temperature_estimation(T1_transitions, chi_0=chi_0)
-    if T1 is None:
-        exit()
-    print(f" Wstępna temperatura T₁ = {T1:.4f}")
+    print(f"\nObliczona temperatura początkowa T1 = {T1:.4f} dla χ₀ = {chi_0}\n")
 
     # Krok 2: zbierz lepsze przejścia podczas plateau w T1
     plateau_transitions = collect_transitions_at_T1(cities, T1, plateau_iters=500)

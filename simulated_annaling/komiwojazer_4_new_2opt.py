@@ -2,8 +2,8 @@ import random
 import math
 import csv
 import matplotlib.pyplot as plt
-
-chi_0 = 0.85
+from random import sample
+chi_0 = 0.8
 
 # --- TSP Helpers --- #
 def load_cities_from_csv(filename="generated_cities.csv"):
@@ -38,23 +38,28 @@ def total_distance(tour, cities):
         dist += math.hypot(x2 - x1, y2 - y1)
     return dist
 
-def two_opt_swap(tour):
+def two_opt_gen(tour):
     """
-    Klasyczny operator 2-OPT: wybiera dwa punkty i odwraca segment między nimi.
+    Generator sąsiedztwa 2-OPT — zwraca wszystkie możliwe permutacje
+    powstałe przez odwrócenie segmentu między dwoma punktami.
     """
     n = len(tour)
-    if n < 4:
-        return tour[:]  # zbyt krótka trasa, brak sensownych przejść
+    i_range = range(2, n)
+    for i in sample(i_range, len(i_range)):
+        j_range = range(i + 1, n + 1)
+        for j in sample(j_range, len(j_range)):
+            xn = tour.copy()
+            xn = xn[: i - 1] + list(reversed(xn[i - 1 : j])) + xn[j:]
+            yield xn
 
-    # losujemy dwie różne pozycje tak, aby a < b - 1 (czyli co najmniej 2-elementowy segment)
-    while True:
-        a, b = sorted(random.sample(range(n), 2))
-        if b - a > 1:
-            break
-
-    # odwracamy segment między a i b (inclusive)
-    new_tour = tour[:a] + tour[a:b+1][::-1] + tour[b+1:]
-    return new_tour
+def random_two_opt_neighbor(tour):
+    """
+    Losowo wybiera jednego sąsiada z generatora two_opt_gen().
+    """
+    neighbors = list(two_opt_gen(tour))
+    if not neighbors:
+        return tour[:]
+    return random.choice(neighbors)
 
 # --- Transition Sampling --- #
 def generate_positive_transitions(cities, num_transitions=500):
@@ -66,7 +71,7 @@ def generate_positive_transitions(cities, num_transitions=500):
         tour = list(range(len(cities)))
         random.shuffle(tour)
         before = total_distance(tour, cities)
-        after_tour = two_opt_swap(tour)
+        after_tour = random_two_opt_neighbor(tour)
         after = total_distance(after_tour, cities)
         if after > before:
             transitions.append((before, after))
@@ -84,7 +89,7 @@ def collect_transitions_at_T1(cities, T1, plateau_iters=500):
     transitions = []
 
     for _ in range(plateau_iters):
-        candidate = two_opt_swap(current)
+        candidate = random_two_opt_neighbor(current)
         candidate_cost = total_distance(candidate, cities)
         delta = candidate_cost - current_cost
         if delta > 0:
@@ -122,14 +127,14 @@ def compute_initial_temperature(transitions, chi_0 = chi_0, p=1, epsilon=1e-2, T
     return Tn
 
 # --- Adaptive Sampling --- #
-def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T=1e-2, max_steps=5):
+def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T= 2, max_steps=9):
     previous_T = None
     transitions_count = 500
 
     for step in range(max_steps):
         transitions = generate_positive_transitions(cities, num_transitions=transitions_count)
         if not transitions:
-            print("Brak pogarszających przejść.")
+            print(" Brak pogarszających przejść.")
             return None
 
         T = compute_initial_temperature(transitions, chi_0=chi_0)
@@ -139,13 +144,13 @@ def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T=1e-2, max_s
             return T
 
         previous_T = T
-        transitions_count *=2  # zwiększ próbkę
+        transitions_count *= 2
 
     print("Temperatura się nie ustabilizowała.")
     return previous_T
 
 # --- Simulated Annealing --- #
-def simulated_annealing_tsp(cities, T0, alpha=0.9993, iterations=10000):
+def simulated_annealing_tsp(cities, T0, alpha= 0.999, iterations=10000):
     current = list(range(len(cities)))
     random.shuffle(current)
     current_cost = total_distance(current, cities)
@@ -154,7 +159,7 @@ def simulated_annealing_tsp(cities, T0, alpha=0.9993, iterations=10000):
     T = T0
 
     for i in range(iterations):
-        candidate = two_opt_swap(current)
+        candidate = random_two_opt_neighbor(current)
         candidate_cost = total_distance(candidate, cities)
         delta = candidate_cost - current_cost
 
@@ -172,6 +177,7 @@ def simulated_annealing_tsp(cities, T0, alpha=0.9993, iterations=10000):
 
     return best, best_cost
 
+
 # --- RUN --- #
 if __name__ == "__main__":
     cities = load_cities_from_csv("../generated_cities.csv")
@@ -179,15 +185,9 @@ if __name__ == "__main__":
         print("Nie udało się wczytać miast. Sprawdź plik 'generated_cities.csv'.")
         exit()
 
+    T1 = adaptive_temperature_estimation(cities, chi_0=chi_0)
 
-
-
-    # Krok 1: Szybka estymacja T₁ z próbki 500 przejść
-    T1_transitions = generate_positive_transitions(cities, num_transitions=500)
-    T1 = adaptive_temperature_estimation(T1_transitions, chi_0=chi_0)
-    if T1 is None:
-        exit()
-    print(f" Wstępna temperatura T₁ = {T1:.4f}")
+    print(f"\nObliczona temperatura początkowa T1 = {T1:.4f} dla χ₀ = {chi_0}\n")
 
     # Krok 2: zbierz lepsze przejścia podczas plateau w T1
     plateau_transitions = collect_transitions_at_T1(cities, T1, plateau_iters=500)
@@ -197,7 +197,7 @@ if __name__ == "__main__":
 
     # Krok 3: oblicz dokładniejsze T0 z użyciem zebranych przejść
     T0 = compute_initial_temperature(plateau_transitions, chi_0=chi_0)
-    print(f"\nObliczona temperatura początkowa T₀ = {T0:.4f} dla χ₀ = {chi_0}\n")
+    print(f"\nObliczona temperatura początkowa T0 = {T0:.4f} dla χ₀ = {chi_0}\n")
 
 
 

@@ -2,12 +2,12 @@ import random
 import math
 import csv
 
-# --- TSP Helpers --- #
+
 def load_cities_from_csv(filename="generated_cities.csv"):
     """
     Wczytuje współrzędne miast z pliku CSV.
 
-    :param filename: Nazwa pliku CSV.
+    :filename: Nazwa pliku CSV.
     :return: Lista miast (każde miasto to krotka (x, y)).
     """
     cities = []
@@ -49,14 +49,14 @@ def two_opt_swap(tour):
         if b - a > 1:
             break
 
-    # odwracamy segment między a i b (inclusive)
+    # odwracamy segment między a i b
     new_tour = tour[:a] + tour[a:b+1][::-1] + tour[b+1:]
     return new_tour
 
 # --- Transition Sampling --- #
 def generate_positive_transitions(cities, num_transitions=100):
     """
-    Generuje losowe trasy i wybiera tylko te przejścia, które pogarszają koszt.
+    Generuje losowe trasy i wybieramy tylko te przejścia, które pogarszają koszt.
     """
     transitions = []
     for _ in range(num_transitions * 2):
