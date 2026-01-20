@@ -158,7 +158,16 @@ def simulated_annealing_tsp(cities, T0, alpha= 0.98, iterations=10000):
         candidate_cost = total_distance(candidate, cities)
         delta = candidate_cost - current_cost
 
-        if delta < 0 or random.random() < math.exp(-delta / T):
+        if delta < 0:
+            accept = True
+        else:
+            exponent = -delta / T
+            if exponent < -700:
+                accept = False
+            else:
+                accept = random.random() < math.exp(exponent)
+
+        if accept:
             current = candidate
             current_cost = candidate_cost
             if current_cost < best_cost:
@@ -167,8 +176,8 @@ def simulated_annealing_tsp(cities, T0, alpha= 0.98, iterations=10000):
 
         T *= alpha
 
-        if i % 1000 == 0:
-            print(f"Iteracja {i}: Najlepszy dystans = {best_cost:.2f}")
+        #if i % 1000 == 0:
+            #print(f"Iteracja {i}: Najlepszy dystans = {best_cost:.2f}")
 
     return best, best_cost
 
@@ -186,22 +195,22 @@ if __name__ == "__main__":
     results = []
 
     total_combinations = len(alphas) * len(chi0s)
-    print(
-        f"Plan: {len(alphas)} alfa × {len(chi0s)} chi0 × {runs_per_pair} uruchomień = {total_combinations * runs_per_pair} SA")
+    #print(
+    #    f"Plan: {len(alphas)} alfa × {len(chi0s)} chi0 × {runs_per_pair} uruchomień = {total_combinations * runs_per_pair} SA")
 
     for alpha, chi0 in tqdm(product(alphas, chi0s), total=total_combinations, desc="Eksperyment"):
-            print(f"\n[Alpha={alpha:.2f}, Chi0={chi0:.2f}]")
+            #print(f"\n[Alpha={alpha:.2f}, Chi0={chi0:.2f}]")
 
             # === Krok 1: Estymacja T0 dla danego chi0 ===
             reset_total_distance_calls()
             T1 = adaptive_temperature_estimation(cities, chi_0=chi0)
             if T1 is None:
-                print("  Pomijam — nie udało się obliczyć T1.")
+                #print("  Pomijam — nie udało się obliczyć T1.")
                 continue
 
             plateau_transitions = collect_transitions_at_T1(cities, T1, plateau_iters=500)
             if not plateau_transitions:
-                print("  Brak przejść na plateau — pomijam.")
+                #print("  Brak przejść na plateau — pomijam.")
                 continue
 
             T0 = compute_initial_temperature(plateau_transitions, chi_0=chi0)
@@ -218,6 +227,7 @@ if __name__ == "__main__":
                 total_calls = calls_for_T0 + calls_in_sa
                 costs.append(best_cost)
                 total_calls_list.append(total_calls)
+
 
             # === Statystyki ===
             costs_arr = np.array(costs)
@@ -260,7 +270,7 @@ if __name__ == "__main__":
                 "entropy": entropy,
             })
 
-            print(f"  Wynik: średnia = {mean_cost:.2f}, koszt = {mean_calls:.0f} wywołań")
+            #print(f"  Wynik: średnia = {mean_cost:.2f}, koszt = {mean_calls:.0f} wywołań")
 
     # === Zapis do CSV ===
     output_file: io.TextIOWrapper

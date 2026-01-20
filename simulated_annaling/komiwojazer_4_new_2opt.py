@@ -3,7 +3,8 @@ import math
 import csv
 import matplotlib.pyplot as plt
 from random import sample
-chi_0 = 0.8
+chi_0 = 0.87
+Tmin = 1e-6
 
 # --- TSP Helpers --- #
 def load_cities_from_csv(filename="generated_cities.csv"):
@@ -23,6 +24,7 @@ def load_cities_from_csv(filename="generated_cities.csv"):
                 cities.append((float(x), float(y)))
         print(f"Miasta zostały wczytane z pliku: {filename}")
     except FileNotFoundError:
+
         print(f" Plik {filename} nie został znaleziony.")
         return None
     except Exception as e:
@@ -38,28 +40,20 @@ def total_distance(tour, cities):
         dist += math.hypot(x2 - x1, y2 - y1)
     return dist
 
-def two_opt_gen(tour):
-    """
-    Generator sąsiedztwa 2-OPT — zwraca wszystkie możliwe permutacje
-    powstałe przez odwrócenie segmentu między dwoma punktami.
-    """
+def two_opt_swap(tour):
     n = len(tour)
-    i_range = range(2, n)
-    for i in sample(i_range, len(i_range)):
-        j_range = range(i + 1, n + 1)
-        for j in sample(j_range, len(j_range)):
-            xn = tour.copy()
-            xn = xn[: i - 1] + list(reversed(xn[i - 1 : j])) + xn[j:]
-            yield xn
-
-def random_two_opt_neighbor(tour):
-    """
-    Losowo wybiera jednego sąsiada z generatora two_opt_gen().
-    """
-    neighbors = list(two_opt_gen(tour))
-    if not neighbors:
+    if n < 4:
         return tour[:]
-    return random.choice(neighbors)
+
+
+    while True:
+        a, b = sorted(random.sample(range(n), 2))
+        if b > a:
+            break
+
+
+    new_tour = tour[:a] + tour[a:b+1][::-1] + tour[b+1:]
+    return new_tour
 
 # --- Transition Sampling --- #
 def generate_positive_transitions(cities, num_transitions=500):
@@ -71,7 +65,7 @@ def generate_positive_transitions(cities, num_transitions=500):
         tour = list(range(len(cities)))
         random.shuffle(tour)
         before = total_distance(tour, cities)
-        after_tour = random_two_opt_neighbor(tour)
+        after_tour = two_opt_swap(tour)
         after = total_distance(after_tour, cities)
         if after > before:
             transitions.append((before, after))
@@ -89,7 +83,7 @@ def collect_transitions_at_T1(cities, T1, plateau_iters=500):
     transitions = []
 
     for _ in range(plateau_iters):
-        candidate = random_two_opt_neighbor(current)
+        candidate = two_opt_swap(current)
         candidate_cost = total_distance(candidate, cities)
         delta = candidate_cost - current_cost
         if delta > 0:
@@ -127,7 +121,7 @@ def compute_initial_temperature(transitions, chi_0 = chi_0, p=1, epsilon=1e-2, T
     return Tn
 
 # --- Adaptive Sampling --- #
-def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T= 2, max_steps=9):
+def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T= 1, max_steps=9):
     previous_T = None
     transitions_count = 500
 
@@ -150,7 +144,7 @@ def adaptive_temperature_estimation(cities, chi_0 = chi_0, epsilon_T= 2, max_ste
     return previous_T
 
 # --- Simulated Annealing --- #
-def simulated_annealing_tsp(cities, T0, alpha= 0.999, iterations=10000):
+def simulated_annealing_tsp(cities, T0, alpha= 0.98, iterations=10000):
     current = list(range(len(cities)))
     random.shuffle(current)
     current_cost = total_distance(current, cities)
@@ -159,7 +153,7 @@ def simulated_annealing_tsp(cities, T0, alpha= 0.999, iterations=10000):
     T = T0
 
     for i in range(iterations):
-        candidate = random_two_opt_neighbor(current)
+        candidate = two_opt_swap(current)
         candidate_cost = total_distance(candidate, cities)
         delta = candidate_cost - current_cost
 
@@ -209,10 +203,10 @@ if __name__ == "__main__":
 
 
     # --- Wielokrotne uruchomienie SA w celu analizy statystycznej --- #
-    print("\nUruchamiam 200 powtórzeń algorytmu...")
+    print("\nUruchamiam 10 powtórzeń algorytmu...")
 
     results = []
-    for i in range(200):
+    for i in range(500):
         _, cost = simulated_annealing_tsp(cities, T0)
         results.append(cost)
 
@@ -220,7 +214,7 @@ if __name__ == "__main__":
     count_best = results.count(best_found)
 
     print(f"\nNajlepszy znaleziony koszt: {best_found:.2f}")
-    print(f" Liczba wystąpień tego kosztu w 200 powtórzeniach: {count_best} ({count_best / 200:.2%})")
+    print(f" Liczba wystąpień tego kosztu w 10 powtórzeniach: {count_best} ({count_best / 10:.2%})")
 
     # Histogram wyników
     plt.figure(figsize=(10, 6))
