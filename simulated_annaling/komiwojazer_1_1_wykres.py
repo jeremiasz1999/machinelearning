@@ -3,7 +3,7 @@ import math
 import random
 import numpy as np
 from tqdm import tqdm
-from itertools import product
+import io
 
 """zmienne globalne"""
 total_distance_calls = 0
@@ -75,45 +75,12 @@ def simulated_annealing(cities, start_temp=10000, min_temp=1e-4, alpha=0.995, it
 
     return best_route, best_cost
 
-def run_classic_sa_for_alpha(cities, alpha, runs=500):
-    costs = []
-    total_calls_list = []
-
-    for _ in range(runs):
-        reset_total_distance_calls()
-        _, best_cost = simulated_annealing(
-            cities,
-            start_temp=10000,
-            min_temp=1e-4,
-            alpha=alpha,
-            iterations_per_temp=100
-        )
-        calls = get_total_distance_calls()
-        costs.append(best_cost)
-        total_calls_list.append(calls)
-
-    costs = np.array(costs)
-    calls = np.array(total_calls_list)
-
-    min_cost = np.min(costs)
-    min_cost_count = np.sum(costs == min_cost)
-
-    return {
-        "alpha": round(alpha, 2),
-        "mean_cost": float(np.mean(costs)),
-        "std_cost": float(np.std(costs)),
-        "min_cost": float(min_cost),
-        "min_cost_count": int(min_cost_count),
-        "mean_total_calls": float(np.mean(calls))
-    }
-
 # --- GŁÓWNY KOD ---
 if __name__ == "__main__":
     cities = load_cities_from_csv()
     if cities is None:
         exit()
 
-    # Zakres alpha: 0.80 do 0.99 z krokiem 0.01
     alphas = np.round(np.arange(0.80, 1.00, 0.01), 2)
     runs_per_alpha = 500
     results = []
@@ -121,16 +88,78 @@ if __name__ == "__main__":
     print(f"Testowanie klasycznego SA dla {len(alphas)} wartości alpha, po {runs_per_alpha} uruchomień.")
 
     for alpha in tqdm(alphas, desc="Klasyczny SA"):
-        stats = run_classic_sa_for_alpha(cities, alpha, runs=runs_per_alpha)
-        results.append(stats)
+        costs = []
+        total_calls_list = []
 
-    # Zapis do CSV
-    output_file = "classic_sa_alpha_sweep_500runs.csv"
-    fieldnames = ["alpha", "mean_cost", "std_cost", "min_cost", "min_cost_count", "mean_total_calls"]
+        for _ in range(runs_per_alpha):
+            reset_total_distance_calls()
+            _, best_cost = simulated_annealing(
+                cities,
+                start_temp=10000,
+                min_temp=1e-4,
+                alpha=alpha,
+                iterations_per_temp=100
+            )
+            calls = get_total_distance_calls()
+            costs.append(best_cost)
+            total_calls_list.append(calls)
 
-    with open(output_file, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        # === Statystyki ===
+        costs_arr = np.array(costs)
+        calls_arr = np.array(total_calls_list)
+
+        mean_cost = np.mean(costs_arr)
+        std_cost = np.std(costs_arr)
+        min_cost = np.min(costs_arr)
+        max_cost = np.max(costs_arr)
+        min_cost_count = np.sum(costs_arr == min_cost)
+        mask = (costs_arr == min_cost)
+        sum_calls_for_min_cost = np.sum(calls_arr[mask])
+        mean_calls = np.mean(calls_arr)
+
+        q10 = np.percentile(costs_arr, 10)
+        q50 = np.percentile(costs_arr, 50)
+        q90 = np.percentile(costs_arr, 90)
+
+        epsilon = 0.01 * min_cost  # 1% od optimum
+        near_opt_count = np.sum(costs_arr <= min_cost + epsilon)
+
+        if len(costs_arr) > 1:
+            corr = np.corrcoef(costs_arr, calls_arr)[0, 1]
+        else:
+            corr = np.nan
+
+        hist, _ = np.histogram(costs_arr, bins=20, density=True)
+        entropy = -np.sum(hist * np.log(hist + 1e-12))
+
+        results.append({
+            "alpha": round(alpha, 2),
+            "mean_cost": float(mean_cost),
+            "std_cost": float(std_cost),
+            "min_cost": float(min_cost),
+            "min_cost_count": int(min_cost_count),
+            "sum_calls_for_min_cost": int(sum_calls_for_min_cost),
+            "max_cost": float(max_cost),
+            "mean_total_calls": float(mean_calls),
+            "q10_cost": float(q10),
+            "median_cost": float(q50),
+            "q90_cost": float(q90),
+            "near_opt_count": int(near_opt_count),
+            "cost_call_corr": float(corr) if not np.isnan(corr) else None,
+            "entropy": float(entropy),
+        })
+
+    # === Zapis do CSV ===
+    output_file: io.TextIOWrapper
+    with open("classic_sa_alpha_sweep_500runs.csv", "w", newline="", encoding="utf-8") as output_file:
+        fieldnames = [
+            "alpha", "mean_cost", "std_cost", "min_cost",
+            "min_cost_count", "sum_calls_for_min_cost", "max_cost", "mean_total_calls",
+            "q10_cost", "median_cost", "q90_cost", "near_opt_count", "cost_call_corr",
+            "entropy"
+        ]
+        writer = csv.DictWriter(output_file, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(results)
 
-    print(f"\n✅ Wyniki zapisane do: {output_file}")
+    print(f"\n✅ Wyniki zapisane do: classic_sa_alpha_sweep_500runs.csv")
